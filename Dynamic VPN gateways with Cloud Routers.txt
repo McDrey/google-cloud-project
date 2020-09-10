@@ -1,0 +1,73 @@
+CREATE A VPC NETWORK
+
+gcloud compute networks create gcp-vpc --project=qwiklabs-gcp-01-c468c7f4f752 --description=gcp-vpc --subnet-mode=custom --bgp-routing-mode=regional
+
+gcloud compute networks subnets create subnet-a --project=qwiklabs-gcp-01-c468c7f4f752 --range=10.5.4.0/24 --network=gcp-vpc --region=us-central1
+
+
+
+gcloud compute networks create on-prem --project=qwiklabs-gcp-01-c468c7f4f752 --description=on-prem --subnet-mode=custom --bgp-routing-mode=regional
+
+gcloud compute networks subnets create subnet-b --project=qwiklabs-gcp-01-c468c7f4f752 --range=10.1.3.0/24 --network=on-prem --region=europe-west1
+
+
+CREATE AN INSTANCE
+
+gcloud beta compute --project=qwiklabs-gcp-01-c468c7f4f752 instances create gcp-server --zone=us-central1-a --machine-type=n1-standard-1 --subnet=subnet-a --network-tier=PREMIUM --maintenance-policy=MIGRATE --service-account=1083829168966-compute@developer.gserviceaccount.com --scopes=https://www.googleapis.com/auth/devstorage.read_only,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/trace.append --image=debian-10-buster-v20200902 --image-project=debian-cloud --boot-disk-size=10GB --boot-disk-type=pd-standard --boot-disk-device-name=gcp-server --no-shielded-secure-boot --no-shielded-vtpm --no-shielded-integrity-monitoring --reservation-affinity=any
+
+gcloud beta compute --project=qwiklabs-gcp-01-c468c7f4f752 instances create on-prem-1 --zone=europe-west1-b --machine-type=n1-standard-1 --subnet=subnet-b --network-tier=PREMIUM --maintenance-policy=MIGRATE --service-account=1083829168966-compute@developer.gserviceaccount.com --scopes=https://www.googleapis.com/auth/devstorage.read_only,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/trace.append --image=debian-10-buster-v20200902 --image-project=debian-cloud --boot-disk-size=10GB --boot-disk-type=pd-standard --boot-disk-device-name=on-prem-1 --no-shielded-secure-boot --no-shielded-vtpm --no-shielded-integrity-monitoring --reservation-affinity=any
+
+
+CREATE A FIREWALL RULE
+
+gcloud compute --project=qwiklabs-gcp-01-c468c7f4f752 firewall-rules create allow-icmp-ssh-gcp-vpc --direction=INGRESS --priority=1000 --network=gcp-vpc --action=ALLOW --rules=tcp:22,icmp --source-ranges=0.0.0.0/0
+
+gcloud compute --project=qwiklabs-gcp-01-c468c7f4f752 firewall-rules create allow-icmp-ssh-on-prem --direction=INGRESS --priority=1000 --network=on-prem --action=ALLOW --rules=tcp:22,icmp --source-ranges=0.0.0.0/0
+
+
+CREATE A CLOUD ROUTER
+
+gcloud compute routers create gcp-vpc-cr --project=qwiklabs-gcp-01-c468c7f4f752 --region=us-central1 --network=gcp-vpc --asn=65470
+
+gcloud compute routers create on-prem-cr --project=qwiklabs-gcp-01-c468c7f4f752 --region=europe-west1 --network=on-prem --asn=65503
+
+
+RESERVE A STATIC ADDRESS
+
+gcloud compute addresses create gcp-vpc-ip --project=qwiklabs-gcp-01-c468c7f4f752 --region=us-central1
+
+gcloud compute addresses create on-prem-ip --project=qwiklabs-gcp-01-c468c7f4f752 --region=europe-west1
+
+
+CREATE A VPN CONNECTION
+
+1.
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" target-vpn-gateways create "vpn-1" --region "us-central1" --network "gcp-vpc"
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" forwarding-rules create "vpn-1-rule-esp" --region "us-central1" --address "146.148.110.51" --ip-protocol "ESP" --target-vpn-gateway "vpn-1"
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" forwarding-rules create "vpn-1-rule-udp500" --region "us-central1" --address "146.148.110.51" --ip-protocol "UDP" --ports "500" --target-vpn-gateway "vpn-1"
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" forwarding-rules create "vpn-1-rule-udp4500" --region "us-central1" --address "146.148.110.51" --ip-protocol "UDP" --ports "4500" --target-vpn-gateway "vpn-1"
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" vpn-tunnels create "vpn-1-tunnel-1" --region "us-central1" --peer-address "35.241.231.96" --shared-secret "gcprocks" --ike-version "2" --target-vpn-gateway "vpn-1"
+
+
+2.
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" target-vpn-gateways create "vpn-2" --region "europe-west1" --network "on-prem"
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" forwarding-rules create "vpn-2-rule-esp" --region "europe-west1" --address "35.241.231.96" --ip-protocol "ESP" --target-vpn-gateway "vpn-2"
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" forwarding-rules create "vpn-2-rule-udp500" --region "europe-west1" --address "35.241.231.96" --ip-protocol "UDP" --ports "500" --target-vpn-gateway "vpn-2"
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" forwarding-rules create "vpn-2-rule-udp4500" --region "europe-west1" --address "35.241.231.96" --ip-protocol "UDP" --ports "4500" --target-vpn-gateway "vpn-2"
+
+gcloud compute --project "qwiklabs-gcp-01-c468c7f4f752" vpn-tunnels create "vpn-2-tunnel-1" --region "europe-west1" --peer-address "146.148.110.51" --shared-secret "gcprocks" --ike-version "2" --target-vpn-gateway "vpn-2"
+
+
+
+CREATE AN INSTANCE
+
+gcloud beta compute --project=qwiklabs-gcp-01-c468c7f4f752 instances create on-prem-2 --zone=europe-west1-c --machine-type=n1-standard-1 --subnet=subnet-c --network-tier=PREMIUM --maintenance-policy=MIGRATE --service-account=1083829168966-compute@developer.gserviceaccount.com --scopes=https://www.googleapis.com/auth/devstorage.read_only,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/trace.append --image=debian-10-buster-v20200902 --image-project=debian-cloud --boot-disk-size=10GB --boot-disk-type=pd-standard --boot-disk-device-name=on-prem-2 --no-shielded-secure-boot --no-shielded-vtpm --no-shielded-integrity-monitoring --reservation-affinity=any
